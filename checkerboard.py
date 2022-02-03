@@ -3,22 +3,19 @@
 import os
 from tqdm import tqdm
 import numpy as np
-import matplotlib.gridspec as gds
-import matplotlib.pyplot as plt
+# import matplotlib.gridspec as gds
+# import matplotlib.pyplot as plt
 import pickle
 
 class Checkerboard:
 
-    def __init__(self, nb_checks, binary_source_path, rig_nb, repetitions, triggers):
+    def __init__(self, nb_checks, binary_source_path, rig_nb):
 
         assert os.path.isfile(binary_source_path)
 
         self._nb_checks = nb_checks
         self._binary_source_path = binary_source_path
         self._rig_nb = rig_nb
-        self._repetitions = repetitions
-        self._triggers = triggers
-
         self._binary_source_file = open(self._binary_source_path, mode='rb')
 
 
@@ -27,44 +24,6 @@ class Checkerboard:
         self._input_file.close()
 
         return
-
-    def get_limits(self):
-
-        return self._triggers.get_limits()
-
-    def get_repetition_limits(self):
-
-        start_trigger_nbs = self._repetitions.get_start_trigger_nbs(condition_nb=0)
-        end_trigger_nbs = self._repetitions.get_end_trigger_nbs(condition_nb=0)
-
-        start_sample_nbs = self._triggers.get_sample_nbs(start_trigger_nbs)
-        end_sample_nbs = self._triggers.get_sample_nbs(end_trigger_nbs)
-
-        repetition_limits = [
-            (start_sample_nb, end_sample_nb)
-            for start_sample_nb, end_sample_nb in zip(start_sample_nbs, end_sample_nbs)
-        ]
-
-        return repetition_limits
-
-    def get_image_nbs(self, sample_nbs):
-
-        trigger_nbs = self._triggers.get_trigger_nbs(sample_nbs)
-
-        sequence_length = 300  # frames
-
-        image_nbs = np.copy(trigger_nbs)
-        for k, trigger_nb in enumerate(trigger_nbs):
-            sequence_nb = trigger_nb // sequence_length
-            is_in_frozen_sequence = (sequence_nb % 2) == 1
-            if is_in_frozen_sequence:
-                offset = 0
-            else:
-                offset = (sequence_nb // 2) * sequence_length
-            image_nb = offset + trigger_nb % sequence_length
-            image_nbs[k] = image_nb
-
-        return image_nbs
 
     def _get_bit(self, bit_nb):
 
@@ -100,9 +59,6 @@ class Checkerboard:
                     message = "Unexpected bit value: {}".format(bit)
                     raise ValueError(message)
 
-        # Here modifications were made on 5.01.2021 by TBT to get the same orientation as the one seen on camera
-        #image = np.flipud(image)
-        #image = np.fliplr(image)
         if self._rig_nb == 2:
             image = np.rot90(image)
             image = np.flipud(image)
@@ -111,20 +67,11 @@ class Checkerboard:
             image = np.fliplr(image)
 
         return image
+    
+    def build_checkerboard(self, nb_frames):
+        checkerboard_array = np.ones((nb_frames,self._nb_checks,self._nb_checks), dtype='uint8') 
+        for i in tqdm(range(checkerboard_array.shape[0]), desc="Reconstruction the stimulus"):
+            checkerboard_array[i,:,:] = self.get_image(i)
+        return checkerboard_array
 
-    def get_clip_shape(self, nb_images):
-
-        shape = (nb_images,) + self.get_image_shape()
-
-        return shape
-
-    def get_clip(self, reference_image_nb, nb_images):
-
-        shape = self.get_clip_shape(nb_images)
-        clip = np.zeros(shape, dtype=np.float)
-
-        for k in range(0, nb_images):
-            image_nb = reference_image_nb + (k - (nb_images - 1))
-            clip[k] = self.get_image(image_nb)
-
-        return clip
+    
